@@ -1,91 +1,39 @@
 import * as React from 'react';
 import {
-    FunctionComponent,
-    useCallback,
-    useRef,
-    useState,
-    useEffect,
-} from 'react';
-import PropTypes from 'prop-types';
+    type ComponentsOverrides,
+    styled,
+    useThemeProps,
+} from '@mui/material/styles';
+import { useCallback, useRef, type ChangeEvent } from 'react';
+import clsx from 'clsx';
 import {
     Select,
+    type SelectProps,
     MenuItem,
     InputLabel,
     FormHelperText,
     FormControl,
+    type FormControlProps,
     Chip,
-} from '@material-ui/core';
-import { makeStyles } from '@material-ui/core/styles';
-import classnames from 'classnames';
+    OutlinedInput,
+    InputLabelProps,
+} from '@mui/material';
 import {
+    type ChoicesProps,
     FieldTitle,
     useInput,
-    InputProps,
-    ChoicesProps,
+    useChoicesContext,
     useChoices,
+    type RaRecord,
+    useGetRecordRepresentation,
+    type SupportCreateSuggestionOptions,
+    useSupportCreateSuggestion,
 } from 'ra-core';
-import InputHelperText from './InputHelperText';
-import { SelectProps } from '@material-ui/core/Select';
-import { FormControlProps } from '@material-ui/core/FormControl';
-import Labeled from './Labeled';
+import { InputHelperText } from './InputHelperText';
+
 import { LinearProgress } from '../layout';
-
-const sanitizeRestProps = ({
-    addLabel,
-    allowEmpty,
-    alwaysOn,
-    basePath,
-    choices,
-    classNamInputWithOptionsPropse,
-    componenInputWithOptionsPropst,
-    crudGetMInputWithOptionsPropsatching,
-    crudGetOInputWithOptionsPropsne,
-    defaultValue,
-    disableValue,
-    filter,
-    filterToQuery,
-    formClassName,
-    initializeForm,
-    input,
-    isRequired,
-    label,
-    limitChoicesToValue,
-    loaded,
-    locale,
-    meta,
-    onChange,
-    options,
-    optionValue,
-    optionText,
-    perPage,
-    record,
-    reference,
-    resource,
-    setFilter,
-    setPagination,
-    setSort,
-    sort,
-    source,
-    textAlign,
-    translate,
-    translateChoice,
-    validation,
-    ...rest
-}: any) => rest;
-
-const useStyles = makeStyles(
-    theme => ({
-        root: {},
-        chips: {
-            display: 'flex',
-            flexWrap: 'wrap',
-        },
-        chip: {
-            margin: theme.spacing(1 / 4),
-        },
-    }),
-    { name: 'RaSelectArrayInput' }
-);
+import type { CommonInputProps } from './CommonInputProps';
+import { Labeled } from '../Labeled';
 
 /**
  * An Input component for a select box allowing multiple selections, using an array of objects for the options
@@ -121,14 +69,17 @@ const useStyles = makeStyles(
  * const optionRenderer = choice => `${choice.first_name} ${choice.last_name}`;
  * <SelectArrayInput source="authors" choices={choices} optionText={optionRenderer} />
  *
- * `optionText` also accepts a React Element, that will be cloned and receive
- * the related choice as the `record` prop. You can use Field components there.
+ * `optionText` also accepts a React Element, that can access
+ * the related choice through the `useRecordContext` hook. You can use Field components there.
  * @example
  * const choices = [
  *    { id: 123, first_name: 'Leo', last_name: 'Tolstoi' },
  *    { id: 456, first_name: 'Jane', last_name: 'Austen' },
  * ];
- * const FullNameField = ({ record }) => <span>{record.first_name} {record.last_name}</span>;
+ * const FullNameField = () => {
+ *     const record = useRecordContext();
+ *     return (<span>{record.first_name} {record.last_name}</span>)
+ * };
  * <SelectArrayInput source="authors" choices={choices} optionText={<FullNameField />}/>
  *
  * The choices are translated by default, so you can use translation identifiers as choices:
@@ -139,67 +90,150 @@ const useStyles = makeStyles(
  *    { id: 'photography', name: 'myroot.tags.photography' },
  * ];
  */
-const SelectArrayInput: FunctionComponent<SelectArrayInputProps> = props => {
+export const SelectArrayInput = (inProps: SelectArrayInputProps) => {
+    const props = useThemeProps({
+        props: inProps,
+        name: PREFIX,
+    });
     const {
-        choices = [],
-        classes: classesOverride,
+        choices: choicesProp,
         className,
-        disableValue,
+        create,
+        createLabel,
+        createValue,
+        disableValue = 'disabled',
         format,
         helperText,
         label,
-        loaded,
-        loading,
-        margin = 'dense',
+        InputLabelProps,
+        isFetching: isFetchingProp,
+        isLoading: isLoadingProp,
+        isPending: isPendingProp,
+        margin,
         onBlur,
         onChange,
-        onFocus,
-        options,
+        onCreate,
+        options = defaultOptions,
         optionText,
-        optionValue,
+        optionValue = 'id',
         parse,
-        resource,
-        source,
+        resource: resourceProp,
+        size = 'small',
+        source: sourceProp,
         translateChoice,
         validate,
-        variant = 'filled',
+        variant,
+        disabled,
+        readOnly,
         ...rest
     } = props;
-    const classes = useStyles(props);
-    const inputLabel = useRef(null);
-    const [labelWidth, setLabelWidth] = useState(0);
-    useEffect(() => {
-        // Will be null while loading and we don't need this fix in that case
-        if (inputLabel.current) {
-            setLabelWidth(inputLabel.current.offsetWidth);
-        }
-    }, []);
 
-    const { getChoiceText, getChoiceValue, getDisableValue } = useChoices({
-        optionText,
-        optionValue,
-        disableValue,
-        translateChoice,
-    });
+    const inputLabel = useRef(null);
+
     const {
-        input,
+        allChoices,
+        isPending,
+        error: fetchError,
+        source,
+        resource,
+        isFromReference,
+    } = useChoicesContext({
+        choices: choicesProp,
+        isLoading: isLoadingProp,
+        isPending: isPendingProp,
+        isFetching: isFetchingProp,
+        resource: resourceProp,
+        source: sourceProp,
+    });
+
+    const {
+        field,
         isRequired,
-        meta: { error, submitError, touched },
+        fieldState: { error, invalid },
+        id,
     } = useInput({
         format,
         onBlur,
         onChange,
-        onFocus,
         parse,
         resource,
         source,
         validate,
+        disabled,
+        readOnly,
         ...rest,
     });
 
-    const renderMenuItemOption = useCallback(choice => getChoiceText(choice), [
-        getChoiceText,
-    ]);
+    const getRecordRepresentation = useGetRecordRepresentation(resource);
+
+    const { getChoiceText, getChoiceValue, getDisableValue } = useChoices({
+        optionText:
+            optionText ??
+            (isFromReference ? getRecordRepresentation : undefined),
+        optionValue,
+        disableValue,
+        translateChoice: translateChoice ?? !isFromReference,
+    });
+
+    const handleChange = useCallback(
+        (eventOrChoice: ChangeEvent<HTMLInputElement> | RaRecord) => {
+            // We might receive an event from the mui component
+            // In this case, it will be the choice id
+            if (eventOrChoice?.target) {
+                // when used with different IDs types, unselection leads to double selection with both types
+                // instead of the value being removed from the array
+                // e.g. we receive eventOrChoice.target.value = [1, '2', 2] instead of [1] after removing 2
+                // this snippet removes a value if it is present twice
+                eventOrChoice.target.value = eventOrChoice.target.value.reduce(
+                    (acc, value) => {
+                        // eslint-disable-next-line eqeqeq
+                        const index = acc.findIndex(v => v == value);
+                        return index < 0
+                            ? [...acc, value]
+                            : [...acc.slice(0, index), ...acc.slice(index + 1)];
+                    },
+                    []
+                );
+                field.onChange(eventOrChoice);
+            } else {
+                // Or we might receive a choice directly, for instance a newly created one
+                field.onChange([
+                    ...(field.value || []),
+                    getChoiceValue(eventOrChoice),
+                ]);
+            }
+        },
+        [field, getChoiceValue]
+    );
+
+    const {
+        getCreateItem,
+        handleChange: handleChangeWithCreateSupport,
+        createElement,
+    } = useSupportCreateSuggestion({
+        create,
+        createLabel,
+        createValue,
+        handleChange,
+        onCreate,
+        optionText,
+    });
+
+    const createItem = create || onCreate ? getCreateItem() : null;
+    const finalChoices =
+        create || onCreate
+            ? [...(allChoices || []), createItem]
+            : allChoices || [];
+
+    const renderMenuItemOption = useCallback(
+        choice =>
+            !!createItem &&
+            choice?.id === createItem.id &&
+            typeof optionText === 'function'
+                ? createItem.name
+                : getChoiceText(choice),
+        [createItem, getChoiceText, optionText]
+    );
 
     const renderMenuItem = useCallback(
         choice => {
@@ -209,20 +243,24 @@ const SelectArrayInput: FunctionComponent<SelectArrayInputProps> = props => {
                     value={getChoiceValue(choice)}
                     disabled={getDisableValue(choice)}
                 >
-                    {renderMenuItemOption(choice)}
+                    {renderMenuItemOption(
+                        !!createItem && choice?.id === createItem.id
+                            ? createItem
+                            : choice
+                    )}
                 </MenuItem>
             ) : null;
         },
-        [getChoiceValue, getDisableValue, renderMenuItemOption]
+        [getChoiceValue, getDisableValue, renderMenuItemOption, createItem]
     );
 
-    if (loading) {
+    if (isPending) {
         return (
             <Labeled
                 label={label}
                 source={source}
                 resource={resource}
-                className={className}
+                className={clsx('ra-input', `ra-input-${source}`, className)}
                 isRequired={isRequired}
             >
                 <LinearProgress />
@@ -230,103 +268,205 @@ const SelectArrayInput: FunctionComponent<SelectArrayInputProps> = props => {
         );
     }
 
+    // Here wen ensure we always have an array and this array does not contain the default value (empty string)
+    const finalValue = Array.isArray(field.value ?? [])
+        ? field.value
+        : field.value
+          ? [field.value]
+          : [];
+
+    const outlinedInputProps =
+        variant === 'outlined'
+            ? {
+                  input: (
+                      <OutlinedInput
+                          id="select-multiple-chip"
+                          label={
+                              <FieldTitle
+                                  label={label}
+                                  source={source}
+                                  resource={resource}
+                                  isRequired={isRequired}
+                              />
+                          }
+                      />
+                  ),
+              }
+            : {};
+    const renderHelperText = !!fetchError || helperText !== false || invalid;
+
     return (
-        <FormControl
-            margin={margin}
-            className={classnames(classes.root, className)}
-            error={touched && !!(error || submitError)}
-            variant={variant}
-            {...sanitizeRestProps(rest)}
-        >
-            <InputLabel
-                ref={inputLabel}
-                id={`${label}-outlined-label`}
-                error={touched && !!(error || submitError)}
+        <>
+            <StyledFormControl
+                margin={margin}
+                className={clsx('ra-input', `ra-input-${source}`, className)}
+                error={fetchError || invalid}
+                variant={variant}
+                {...sanitizeRestProps(rest)}
             >
-                <FieldTitle
-                    label={label}
-                    source={source}
-                    resource={resource}
-                    isRequired={isRequired}
-                />
-            </InputLabel>
-            <Select
-                autoWidth
-                labelId={`${label}-outlined-label`}
-                multiple
-                error={!!(touched && (error || submitError))}
-                renderValue={(selected: any[]) => (
-                    <div className={classes.chips}>
-                        {selected
-                            .map(item =>
-                                choices.find(
-                                    choice => getChoiceValue(choice) === item
+                <InputLabel
+                    ref={inputLabel}
+                    id={`${id}-outlined-label`}
+                    htmlFor={id}
+                    {...InputLabelProps}
+                >
+                    <FieldTitle
+                        label={label}
+                        source={source}
+                        resource={resource}
+                        isRequired={isRequired}
+                    />
+                </InputLabel>
+                <Select
+                    id={id}
+                    labelId={`${id}-outlined-label`}
+                    label={
+                        <FieldTitle
+                            label={label}
+                            source={source}
+                            resource={resource}
+                            isRequired={isRequired}
+                        />
+                    }
+                    multiple
+                    error={!!fetchError || invalid}
+                    renderValue={(selected: any[]) => (
+                        <div className={SelectArrayInputClasses.chips}>
+                            {(Array.isArray(selected) ? selected : [])
+                                .map(item =>
+                                    (allChoices || []).find(
+                                        // eslint-disable-next-line eqeqeq
+                                        choice => getChoiceValue(choice) == item
+                                    )
                                 )
-                            )
-                            .map(item => (
-                                <Chip
-                                    key={getChoiceValue(item)}
-                                    label={renderMenuItemOption(item)}
-                                    className={classes.chip}
-                                />
-                            ))}
-                    </div>
-                )}
-                data-testid="selectArray"
-                {...input}
-                value={input.value || []}
-                {...options}
-                labelWidth={labelWidth}
-            >
-                {choices.map(renderMenuItem)}
-            </Select>
-            <FormHelperText error={touched && !!(error || submitError)}>
-                <InputHelperText
-                    touched={touched}
-                    error={error || submitError}
-                    helperText={helperText}
-                />
-            </FormHelperText>
-        </FormControl>
+                                .filter(item => !!item)
+                                .map(item => (
+                                    <Chip
+                                        key={getChoiceValue(item)}
+                                        label={renderMenuItemOption(item)}
+                                        className={SelectArrayInputClasses.chip}
+                                        size="small"
+                                    />
+                                ))}
+                        </div>
+                    )}
+                    disabled={disabled || readOnly}
+                    readOnly={readOnly}
+                    data-testid="selectArray"
+                    size={size}
+                    {...field}
+                    {...options}
+                    onChange={handleChangeWithCreateSupport}
+                    value={finalValue}
+                    {...outlinedInputProps}
+                >
+                    {finalChoices.map(renderMenuItem)}
+                </Select>
+                {renderHelperText ? (
+                    <FormHelperText error={!!fetchError || !!error}>
+                        <InputHelperText
+                            error={error?.message || fetchError?.message}
+                            helperText={helperText}
+                        />
+                    </FormHelperText>
+                ) : null}
+            </StyledFormControl>
+            {createElement}
+        </>
     );
 };
 
-export interface SelectArrayInputProps
-    extends Omit<ChoicesProps, 'choices'>,
-        Omit<InputProps<SelectProps>, 'source'>,
-        Omit<
-            FormControlProps,
-            'defaultValue' | 'onBlur' | 'onChange' | 'onFocus'
-        > {
-    choices?: object[];
-    source?: string;
+export type SelectArrayInputProps = ChoicesProps &
+    Omit<SupportCreateSuggestionOptions, 'handleChange'> &
+    Omit<CommonInputProps, 'source'> &
+    Omit<FormControlProps, 'defaultValue' | 'onBlur' | 'onChange'> & {
+        options?: SelectProps;
+        InputLabelProps?: Omit<InputLabelProps, 'htmlFor' | 'id' | 'ref'>;
+        source?: string;
+        onChange?: (event: ChangeEvent<HTMLInputElement> | RaRecord) => void;
+    };
+
+const sanitizeRestProps = ({
+    alwaysOn,
+    choices,
+    defaultValue,
+    disableValue,
+    emptyText,
+    enableGetChoices,
+    filter,
+    filterToQuery,
+    initializeForm,
+    initialValue,
+    input,
+    isRequired,
+    label,
+    limitChoicesToValue,
+    loaded,
+    locale,
+    meta,
+    onChange,
+    options,
+    optionValue,
+    optionText,
+    perPage,
+    record,
+    reference,
+    resource,
+    setFilter,
+    setPagination,
+    setSort,
+    sort,
+    source,
+    textAlign,
+    translate,
+    translateChoice,
+    validation,
+    ...rest
+}: any) => rest;
+
+const PREFIX = 'RaSelectArrayInput';
+
+export const SelectArrayInputClasses = {
+    chips: `${PREFIX}-chips`,
+    chip: `${PREFIX}-chip`,
+};
+
+const StyledFormControl = styled(FormControl, {
+    name: PREFIX,
+    overridesResolver: (props, styles) => styles.root,
+})(({ theme }) => ({
+    minWidth: theme.spacing(20),
+    [theme.breakpoints.down('sm')]: {
+        width: '100%',
+    },
+    [`& .${SelectArrayInputClasses.chips}`]: {
+        display: 'flex',
+        flexWrap: 'wrap',
+    },
+
+    [`& .${SelectArrayInputClasses.chip}`]: {
+        marginTop: theme.spacing(0.5),
+        marginRight: theme.spacing(0.5),
+    },
+}));
+
+const defaultOptions = {};
+
+declare module '@mui/material/styles' {
+    interface ComponentNameToClassKey {
+        RaSelectArrayInput: 'root' | 'chips' | 'chip';
+    }
+
+    interface ComponentsPropsList {
+        RaSelectArrayInput: Partial<SelectArrayInputProps>;
+    }
+
+    interface Components {
+        RaSelectArrayInput?: {
+            defaultProps?: ComponentsPropsList['RaSelectArrayInput'];
+            styleOverrides?: ComponentsOverrides<
+                Omit<Theme, 'components'>
+            >['RaSelectArrayInput'];
+        };
+    }
 }
-
-SelectArrayInput.propTypes = {
-    choices: PropTypes.arrayOf(PropTypes.object),
-    classes: PropTypes.object,
-    className: PropTypes.string,
-    children: PropTypes.node,
-    label: PropTypes.string,
-    options: PropTypes.object,
-    optionText: PropTypes.oneOfType([
-        PropTypes.string,
-        PropTypes.func,
-        PropTypes.element,
-    ]).isRequired,
-    optionValue: PropTypes.string.isRequired,
-    disableValue: PropTypes.string,
-    resource: PropTypes.string,
-    source: PropTypes.string,
-    translateChoice: PropTypes.bool,
-};
-
-SelectArrayInput.defaultProps = {
-    options: {},
-    optionText: 'name',
-    optionValue: 'id',
-    disableValue: 'disabled',
-    translateChoice: true,
-};
-
-export default SelectArrayInput;

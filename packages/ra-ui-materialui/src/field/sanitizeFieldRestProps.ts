@@ -1,26 +1,6 @@
-const sanitizeFieldRestProps: (props: any) => any = ({
-    addLabel,
-    allowEmpty,
-    basePath,
-    cellClassName,
-    className,
-    emptyText,
-    formClassName,
-    fullWidth,
-    headerClassName,
-    label,
-    linkType,
-    link,
-    locale,
-    record,
-    resource,
-    sortable,
-    sortBy,
-    sortByOrder,
-    source,
-    textAlign,
-    translateChoice,
-    ...props
-}) => props;
-
-export default sanitizeFieldRestProps;
+export {
+    /**
+     * @deprecated Import from `ra-core` or `react-admin` instead
+     */
+    sanitizeFieldRestProps,
+} from 'ra-core';

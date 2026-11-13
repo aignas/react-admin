@@ -1,5 +1,3 @@
-import inflection from 'inflection';
-
 import getValuesFromRecords from './getValuesFromRecords';
 
 import {
@@ -13,14 +11,19 @@ import {
     valuesAreNumeric,
     valuesAreObject,
     valuesAreString,
+    valuesAreUrl,
+    valuesAreImageUrl,
+    valuesAreEmail,
 } from './assertions';
+import { pluralize } from 'inflection';
 
-const types = [
+export const InferenceTypes = [
     'array',
     'boolean',
     'date',
     'email',
     'id',
+    'image',
     'number',
     'reference',
     'referenceChild',
@@ -29,9 +32,10 @@ const types = [
     'richText',
     'string',
     'url',
+    'object',
 ] as const;
 
-export type PossibleInferredElementTypes = typeof types[number];
+export type PossibleInferredElementTypes = (typeof InferenceTypes)[number];
 
 export interface InferredElementDescription {
     type: PossibleInferredElementTypes;
@@ -54,7 +58,7 @@ export interface InferredElementDescription {
  */
 export const inferTypeFromValues = (
     name,
-    values = []
+    values: any[] = []
 ): InferredElementDescription => {
     if (name === 'id') {
         return { type: 'id', props: { source: name } };
@@ -64,9 +68,7 @@ export const inferTypeFromValues = (
             type: 'reference',
             props: {
                 source: name,
-                reference: inflection.pluralize(
-                    name.substr(0, name.length - 3)
-                ),
+                reference: pluralize(name.substr(0, name.length - 3)),
             },
             children: { type: 'referenceChild' },
         };
@@ -76,9 +78,7 @@ export const inferTypeFromValues = (
             type: 'reference',
             props: {
                 source: name,
-                reference: inflection.pluralize(
-                    name.substr(0, name.length - 2)
-                ),
+                reference: pluralize(name.substr(0, name.length - 2)),
             },
             children: { type: 'referenceChild' },
         };
@@ -88,9 +88,7 @@ export const inferTypeFromValues = (
             type: 'referenceArray',
             props: {
                 source: name,
-                reference: inflection.pluralize(
-                    name.substr(0, name.length - 4)
-                ),
+                reference: pluralize(name.substr(0, name.length - 4)),
             },
             children: { type: 'referenceArrayChild' },
         };
@@ -100,9 +98,7 @@ export const inferTypeFromValues = (
             type: 'referenceArray',
             props: {
                 source: name,
-                reference: inflection.pluralize(
-                    name.substr(0, name.length - 3)
-                ),
+                reference: pluralize(name.substr(0, name.length - 3)),
             },
             children: { type: 'referenceArrayChild' },
         };
@@ -141,10 +137,13 @@ export const inferTypeFromValues = (
         return { type: 'date', props: { source: name } };
     }
     if (valuesAreString(values)) {
-        if (name === 'email') {
+        if (name === 'email' || valuesAreEmail(values)) {
             return { type: 'email', props: { source: name } };
         }
-        if (name === 'url') {
+        if (name === 'url' || valuesAreUrl(values)) {
+            if (valuesAreImageUrl(values)) {
+                return { type: 'image', props: { source: name } };
+            }
             return { type: 'url', props: { source: name } };
         }
         if (valuesAreDateString(values)) {
@@ -153,15 +152,20 @@ export const inferTypeFromValues = (
         if (valuesAreHtml(values)) {
             return { type: 'richText', props: { source: name } };
         }
+        if (valuesAreInteger(values) || valuesAreNumeric(values)) {
+            return { type: 'number', props: { source: name } };
+        }
         return { type: 'string', props: { source: name } };
     }
     if (valuesAreInteger(values) || valuesAreNumeric(values)) {
         return { type: 'number', props: { source: name } };
     }
     if (valuesAreObject(values)) {
-        // we need to go deeper
-        // Arbitrarily, choose the first prop of the first object
+        /// Arbitrarily, choose the first prop of the first object
         const propName = Object.keys(values[0]).shift();
+        if (!propName) {
+            return { type: 'object', props: { source: name } };
+        }
         const leafValues = values.map(v => v[propName]);
         return inferTypeFromValues(`${name}.${propName}`, leafValues);
     }

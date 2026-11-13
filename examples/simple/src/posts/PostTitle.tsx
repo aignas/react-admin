@@ -1,13 +1,14 @@
 import * as React from 'react';
-import { useTranslate, Record } from 'react-admin';
+import { useTranslate, useRecordContext } from 'react-admin';
 
-export default ({ record }: { record?: Record }) => {
+export default () => {
     const translate = useTranslate();
+    const record = useRecordContext();
     return (
-        <span>
+        <>
             {record
                 ? translate('post.edit.title', { title: record.title })
                 : ''}
-        </span>
+        </>
     );
 };

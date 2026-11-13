@@ -1,60 +1,107 @@
-import RichTextInput from 'ra-input-rich-text';
 import * as React from 'react';
+import { RichTextInput } from 'ra-input-rich-text';
 import {
     TopToolbar,
     AutocompleteInput,
     ArrayInput,
     BooleanInput,
     CheckboxGroupInput,
-    Datagrid,
+    DataTable,
     DateField,
     DateInput,
     Edit,
     CloneButton,
+    CreateButton,
     ShowButton,
     EditButton,
-    FormTab,
     ImageField,
     ImageInput,
     NumberInput,
     ReferenceManyField,
+    ReferenceManyCount,
     ReferenceInput,
     SelectInput,
     SimpleFormIterator,
     TabbedForm,
-    TextField,
     TextInput,
     minValue,
     number,
     required,
     FormDataConsumer,
-} from 'react-admin'; // eslint-disable-line import/no-unresolved
-import { Box, BoxProps } from '@material-ui/core';
-
+    useCreateSuggestionContext,
+    EditActionsProps,
+    CanAccess,
+} from 'react-admin';
+import {
+    Box,
+    BoxProps,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    TextField as MuiTextField,
+} from '@mui/material';
 import PostTitle from './PostTitle';
 import TagReferenceInput from './TagReferenceInput';
 
-const EditActions = ({ basePath, data, hasShow }: any) => (
+const CreateCategory = ({
+    onAddChoice,
+}: {
+    onAddChoice: (record: any) => void;
+}) => {
+    const { filter, onCancel, onCreate } = useCreateSuggestionContext();
+    const [value, setValue] = React.useState(filter || '');
+    const handleSubmit = (event: React.FormEvent) => {
+        event.preventDefault();
+        const choice = { name: value, id: value.toLowerCase() };
+        onAddChoice(choice);
+        onCreate(choice);
+        setValue('');
+        return false;
+    };
+    return (
+        <Dialog open onClose={onCancel}>
+            <form onSubmit={handleSubmit}>
+                <DialogContent>
+                    <MuiTextField
+                        label="New Category"
+                        value={value}
+                        onChange={event => setValue(event.target.value)}
+                        autoFocus
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button type="submit">Save</Button>
+                    <Button onClick={onCancel}>Cancel</Button>
+                </DialogActions>
+            </form>
+        </Dialog>
+    );
+};
+
+const EditActions = ({ hasShow }: EditActionsProps) => (
     <TopToolbar>
-        <CloneButton
-            className="button-clone"
-            basePath={basePath}
-            record={data}
-        />
-        {hasShow && <ShowButton basePath={basePath} record={data} />}
+        <CloneButton className="button-clone" />
+        {hasShow && <ShowButton />}
+        {/* FIXME: added because react-router HashHistory cannot block navigation induced by address bar changes */}
+        <CreateButton />
     </TopToolbar>
 );
 
 const SanitizedBox = ({
     fullWidth,
-    basePath,
     ...props
-}: BoxProps & { fullWidth?: boolean; basePath?: string }) => <Box {...props} />;
+}: BoxProps & { fullWidth?: boolean }) => <Box {...props} />;
 
-const PostEdit = ({ permissions, ...props }) => (
-    <Edit title={<PostTitle />} actions={<EditActions />} {...props}>
-        <TabbedForm initialValues={{ average_note: 0 }} warnWhenUnsavedChanges>
-            <FormTab label="post.form.summary">
+const categories = [
+    { name: 'Tech', id: 'tech' },
+    { name: 'Lifestyle', id: 'lifestyle' },
+];
+
+const PostEdit = () => (
+    <Edit title={<PostTitle />} actions={<EditActions />}>
+        <TabbedForm defaultValues={{ average_note: 0 }} warnWhenUnsavedChanges>
+            <TabbedForm.Tab label="post.form.summary">
                 <SanitizedBox
                     display="flex"
                     flexDirection="column"
@@ -62,7 +109,7 @@ const PostEdit = ({ permissions, ...props }) => (
                     justifyContent="space-between"
                     fullWidth
                 >
-                    <TextInput disabled source="id" />
+                    <TextInput InputProps={{ disabled: true }} source="id" />
                     <TextInput
                         source="title"
                         validate={required()}
@@ -70,8 +117,7 @@ const PostEdit = ({ permissions, ...props }) => (
                     />
                 </SanitizedBox>
                 <TextInput
-                    multiline={true}
-                    fullWidth={true}
+                    multiline
                     source="teaser"
                     validate={required()}
                     resettable
@@ -84,30 +130,25 @@ const PostEdit = ({ permissions, ...props }) => (
                         { id: 42, name: 'Sean Phonee' },
                     ]}
                 />
-                <ImageInput multiple source="pictures" accept="image/*">
+                <ImageInput
+                    multiple
+                    source="pictures"
+                    accept={{ 'image/*': ['.jpeg', '.png', '.jpg'] }}
+                    helperText=""
+                >
                     <ImageField source="src" title="title" />
                 </ImageInput>
-                {permissions === 'admin' && (
+                <CanAccess action="edit" resource="posts.authors">
                     <ArrayInput source="authors">
-                        <SimpleFormIterator>
-                            <ReferenceInput
-                                label="User"
-                                source="user_id"
-                                reference="users"
-                            >
-                                <AutocompleteInput />
+                        <SimpleFormIterator inline>
+                            <ReferenceInput source="user_id" reference="users">
+                                <AutocompleteInput helperText={false} />
                             </ReferenceInput>
                             <FormDataConsumer>
-                                {({
-                                    formData,
-                                    scopedFormData,
-                                    getSource,
-                                    ...rest
-                                }) =>
+                                {({ scopedFormData }) =>
                                     scopedFormData && scopedFormData.user_id ? (
                                         <SelectInput
-                                            label="Role"
-                                            source={getSource('role')}
+                                            source="source"
                                             choices={[
                                                 {
                                                     id: 'headwriter',
@@ -122,24 +163,24 @@ const PostEdit = ({ permissions, ...props }) => (
                                                     name: 'Co-Writer',
                                                 },
                                             ]}
-                                            {...rest}
+                                            helperText={false}
                                         />
                                     ) : null
                                 }
                             </FormDataConsumer>
                         </SimpleFormIterator>
                     </ArrayInput>
-                )}
-            </FormTab>
-            <FormTab label="post.form.body">
+                </CanAccess>
+            </TabbedForm.Tab>
+            <TabbedForm.Tab label="post.form.body">
                 <RichTextInput
                     source="body"
-                    label=""
+                    label={false}
                     validate={required()}
-                    addLabel={false}
+                    fullWidth
                 />
-            </FormTab>
-            <FormTab label="post.form.miscellaneous">
+            </TabbedForm.Tab>
+            <TabbedForm.Tab label="post.form.miscellaneous">
                 <TagReferenceInput
                     reference="tags"
                     source="tags"
@@ -153,36 +194,55 @@ const PostEdit = ({ permissions, ...props }) => (
                 </ArrayInput>
                 <DateInput source="published_at" />
                 <SelectInput
-                    allowEmpty
+                    create={
+                        <CreateCategory
+                            // Added on the component because we have to update the choices
+                            // ourselves as we don't use a ReferenceInput
+                            onAddChoice={choice => categories.push(choice)}
+                        />
+                    }
                     resettable
                     source="category"
-                    choices={[
-                        { name: 'Tech', id: 'tech' },
-                        { name: 'Lifestyle', id: 'lifestyle' },
-                    ]}
+                    choices={categories}
                 />
                 <NumberInput
                     source="average_note"
                     validate={[required(), number(), minValue(0)]}
                 />
                 <BooleanInput source="commentable" defaultValue />
-                <TextInput disabled source="views" />
-            </FormTab>
-            <FormTab label="post.form.comments">
-                <ReferenceManyField
-                    reference="comments"
-                    target="post_id"
-                    addLabel={false}
-                    fullWidth
-                >
-                    <Datagrid>
-                        <DateField source="created_at" />
-                        <TextField source="author.name" />
-                        <TextField source="body" />
-                        <EditButton />
-                    </Datagrid>
+                <TextInput InputProps={{ disabled: true }} source="views" />
+                <ArrayInput source="pictures">
+                    <SimpleFormIterator>
+                        <TextInput source="url" defaultValue="" />
+                        <ArrayInput source="metas.authors">
+                            <SimpleFormIterator>
+                                <TextInput source="name" defaultValue="" />
+                            </SimpleFormIterator>
+                        </ArrayInput>
+                    </SimpleFormIterator>
+                </ArrayInput>
+            </TabbedForm.Tab>
+            <TabbedForm.Tab
+                label="post.form.comments"
+                count={
+                    <ReferenceManyCount
+                        reference="comments"
+                        target="post_id"
+                        sx={{ lineHeight: 'inherit' }}
+                    />
+                }
+            >
+                <ReferenceManyField reference="comments" target="post_id">
+                    <DataTable>
+                        <DataTable.Col source="created_at" field={DateField} />
+                        <DataTable.Col source="author.name" />
+                        <DataTable.Col source="body" />
+                        <DataTable.Col>
+                            <EditButton />
+                        </DataTable.Col>
+                    </DataTable>
                 </ReferenceManyField>
-            </FormTab>
+            </TabbedForm.Tab>
         </TabbedForm>
     </Edit>
 );
